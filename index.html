@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student-University Matching</title>
+  <script src="https://unpkg.com/javascript-lp-solver/prod/solver.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Student-University Matching</h1>
+  <div>
+    <label>Universities CSV: <input type="file" id="universitiesFile" accept=".csv,.xlsx"></label>
+    <label>Applicants CSV: <input type="file" id="applicantsFile" accept=".csv,.xlsx"></label>
+    <button id="solveBtn">
+      Solve Matching
+      <span id="spinner" style="display: none;"></span>
+    </button>
+  </div>
+  <div id="results"></div>
+  <script src="script.js"></script>
+</body>
+</html>
