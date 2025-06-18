@@ -11,13 +11,43 @@
 <body>
   <h1>Student-University Matching</h1>
   <div>
-    <label>Universities CSV: <input type="file" id="universitiesFile" accept=".csv,.xlsx"></label>
-    <label>Applicants CSV: <input type="file" id="applicantsFile" accept=".csv,.xlsx"></label>
-    <button id="solveBtn">
-      Solve Matching
-      <span id="spinner" style="display: none;"></span>
-    </button>
+    <label>Universities CSV: <input type="file" id="universitiesFile" accept=".csv,.xlsx,.xls"></label>
+    <label>Applicants CSV: <input type="file" id="applicantsFile" accept=".csv,.xlsx,.xls"></label>
   </div>
+  <div id="exchangeIFactorContainer" style="display: none;">
+    <label title="Weight multiplier for non-Exchange-I preferences">Exchange I Factor: <input type="number" id="exchangeIFactor" min="1" value="1" step="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57"></label>
+    <p class="info-text">The Exchange I Factor is a multiplier for the weight of non-Exchange-I preferences. Higher values prioritize Exchange-I assignments.</p>
+  </div>
+  
+  <div id="manualAssignment" style="display: none;">
+    <h2>Manual Assignment</h2>
+    <div class="manual-controls">
+      <div class="search-container">
+        <input type="text" id="studentSearch" placeholder="Search for student...">
+        <div id="studentResults" class="search-results"></div>
+      </div>
+      <div class="assignment-container" style="display: none;">
+        <h3>Assign <span id="selectedStudentName"></span></h3>
+        <div id="preferenceOptions"></div>
+        <button id="addAssignmentBtn">Add Assignment</button>
+        <button id="cancelAssignmentBtn">Cancel</button>
+      </div>
+    </div>
+    <div id="manualAssignmentsList">
+      <h3>Manual Assignments</h3>
+      <table id="manualAssignmentsTable">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Assigned University</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  
   <div id="results"></div>
   <script src="script.js"></script>
 </body>
