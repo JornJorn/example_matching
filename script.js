@@ -4,6 +4,42 @@ let idToStud = {};
 let manualAssignments = [];
 let selectedStudentForAssignment = null;
 
+const FACULTY_MAPPING = {
+  'BMS': ['Psychology', 'Communication Science', 'Industrial Engineering and Management',
+          'International Business Administration', 'Management, Society & Technology'],
+  'EEMCS': ['Applied Mathematics', 'Business & IT', 'Computer Science', 'Creative Technology',
+            'Electrical Engineering', 'Business Information Technology', 'Embedded Systems',
+            'Interaction Technology', 'Robotics', 'Systems and Control'],
+  'ET': ['Civil Engineering', 'Industrial Design Engineering', 'Mechanical Engineering',
+         'Civil Engineering and Management', 'Construction Management & Engineering',
+         'Sustainable Energy Technology', 'Mechanical Engineering - Amsterdam (VU-UT)'],
+  'ITC': ['Spatial Engineering', 'Geo-information Science and Earth Observation'],
+  'ST': ['Advanced Technology', 'Biomedical Engineering', 'Chemical Science & Engineering', 'Health Sciences',
+         'Technical Medicine', 'Applied Physics', 'Nanotechnology', 'Water Technology',
+         'Materials Science & Engineering', 'Fluid Dynamics'],
+  'UCT': ['Technology and Liberal Arts & Sciences (ATLAS)']
+};
+
+function getFacultyForStudyField(studyField) {
+  studyField = studyField.replace(/\s*\(BSc\)|\s*\(MSc\)/g, '').trim();
+  for (const [faculty, fields] of Object.entries(FACULTY_MAPPING)) {
+    if (fields.includes(studyField)) {
+      return faculty;
+    }
+  }
+  console.error(`Unknown faculty for study field: ${studyField}`);
+  return null;
+}
+
+function hasUniFacultyConstraints(uni) {
+  return (uni.max_BMS || 0) > 0 || (uni.max_EEMCS || 0) > 0 || (uni.max_ET || 0) > 0 ||
+         (uni.max_ITC || 0) > 0 || (uni.max_ST || 0) > 0 || (uni.max_UCT || 0) > 0;
+}
+
+function hasFacultyConstraints() {
+  return Object.values(idToUni).some(uni => hasUniFacultyConstraints(uni));
+}
+
 // Validate Exchange I Factor input
 function validateInput(input) {
   let value = parseInt(input.value);
@@ -63,6 +99,53 @@ function checkManualAssignmentsFeasibility() {
     if (uniCounts[uni.agreement_ID][semester] > uni[agreementKey]) {
       errors.push(`Agreement ${uni.agreement_ID} capacity exceeded in ${semester === 'f' ? '1st' : '2nd'} semester (${uniCounts[uni.agreement_ID][semester]}/${uni[agreementKey]})`);
     }
+  }
+  
+  if (hasFacultyConstraints()) {
+    const universityFacultyCounts = {};
+    
+    for (const assignment of manualAssignments) {
+      const student = idToStud[assignment.studentId];
+      const uni = idToUni[assignment.uniKey];
+      
+      if (!student || !uni || !hasUniFacultyConstraints(uni)) continue;
+      
+      const studentFaculty = getFacultyForStudyField(student.study_field);
+      if (!studentFaculty) continue;
+      
+      const semester = student.semester === '1st semester' || student.semester === 'Full academic year' ? 'f' : 's';
+      
+      if (!universityFacultyCounts[uni.key]) {
+        universityFacultyCounts[uni.key] = {};
+        ['BMS', 'EEMCS', 'ET', 'ITC', 'ST', 'UCT'].forEach(faculty => {
+          universityFacultyCounts[uni.key][faculty] = { f: 0, s: 0 };
+        });
+      }
+      
+      universityFacultyCounts[uni.key][studentFaculty][semester]++;
+    }
+    
+    Object.keys(universityFacultyCounts).forEach(uniKey => {
+      const uni = idToUni[uniKey];
+      if (!uni) return;
+      
+      ['BMS', 'EEMCS', 'ET', 'ITC', 'ST', 'UCT'].forEach(faculty => {
+        const facultyMax = uni[`max_${faculty}`] || 0;
+        
+        if (facultyMax > 0) {
+          const used1 = universityFacultyCounts[uniKey][faculty].f || 0;
+          const used2 = universityFacultyCounts[uniKey][faculty].s || 0;
+          
+          if (used1 > facultyMax) {
+            errors.push(`University ${uniKey} faculty ${faculty} capacity exceeded in 1st semester (${used1}/${facultyMax})`);
+          }
+          
+          if (used2 > facultyMax) {
+            errors.push(`University ${uniKey} faculty ${faculty} capacity exceeded in 2nd semester (${used2}/${facultyMax})`);
+          }
+        }
+      });
+    });
   }
   
   const assignedStudents = {};
@@ -309,7 +392,13 @@ function processUniversitiesData() {
     students_assigned: r['Students assigned'],
     partner_department: r['Partner department or consortium'],
     comments_spot_dis: r['Comments on spot distribution'],
-    comments_agreement: r['Comments regarding the agreement (in portal)']
+    comments_agreement: r['Comments regarding the agreement (in portal)'],
+    max_BMS: r['The maximum number of spots/seats for BMS'] || 0,
+    max_EEMCS: r['The maximum number of spots/seats for EEMCS'] || 0,
+    max_ET: r['The maximum number of spots/seats for ET'] || 0,
+    max_ITC: r['The maximum number of spots/seats for ITC'] || 0,
+    max_ST: r['The maximum number of spots/seats for ST'] || 0,
+    max_UCT: r['The maximum number of spots/seats for UCT'] || 0
   }));
   
   idToUni = {};
@@ -338,7 +427,13 @@ function processUniversitiesData() {
       M1: 1000, 
       total2: 1000, 
       B2: 1000, 
-      M2: 1000 
+      M2: 1000,
+      max_BMS: 1000,
+      max_EEMCS: 1000,
+      max_ET: 1000,
+      max_ITC: 1000,
+      max_ST: 1000,
+      max_UCT: 1000
     };
     idToUni[key] = uni;
 
@@ -563,6 +658,18 @@ function buildModel(exchangeI_factor = 1) {
     model.constraints['cap_uBSc_s_' + u.key] = { max: u.B2 };
     model.constraints['cap_uMSc_f_' + u.key] = { max: u.M1 };
     model.constraints['cap_uMSc_s_' + u.key] = { max: u.M2 };
+    
+    // Add faculty constraints per university if this university has faculty constraints
+    if (hasUniFacultyConstraints(u)) {
+      const faculties = ['BMS', 'EEMCS', 'ET', 'ITC', 'ST', 'UCT'];
+      faculties.forEach(faculty => {
+        const facultyMax = u[`max_${faculty}`] || 0;        
+        const constraintNameF = `cap_faculty_f_${faculty}_${u.key}`;
+        model.constraints[constraintNameF] = { max: facultyMax };
+        const constraintNameS = `cap_faculty_s_${faculty}_${u.key}`;
+        model.constraints[constraintNameS] = { max: facultyMax };
+      });
+    }
   });
   
   // variables for each arc
@@ -616,6 +723,15 @@ function buildVar(weight, studID, uni, sem, stud) {
   v['cap_ag_' + sem + '_' + uni.agreement_ID] = 1;
   v['cap_u_' + sem + '_' + uni.key] = 1;
   v['cap_u' + stud.study_level + '_' + sem + '_' + uni.key] = 1;
+  
+  if (hasUniFacultyConstraints(uni)) {
+    const studentFaculty = getFacultyForStudyField(stud.study_field);
+    if (studentFaculty) {
+      const constraintName = `cap_faculty_${sem}_${studentFaculty}_${uni.key}`;
+      v[constraintName] = 1;
+    }
+  }
+  
   return v;
 }
 
@@ -662,7 +778,9 @@ function displayResults(results) {
           uniKey, 
           pref: idx + 1,
           fullName: fullName,
-          partnerName: partnerName
+          partnerName: partnerName,
+          student: student,
+          uni: uni
         });
       }
     }
@@ -694,6 +812,11 @@ function displayResults(results) {
   const totalStudentsLi = document.createElement('li');
   totalStudentsLi.innerHTML = `<strong>Total students: ${totalStudents}</strong>`;
   ul.appendChild(totalStudentsLi);
+
+  const averagePreference = totalStudents > 0 ? (choiceCounts.reduce((sum, count) => sum + count * (choiceCounts.indexOf(count) + 1), 0) / totalStudents) : 0;
+  const averageLi = document.createElement('li');
+  averageLi.innerHTML = `<strong>Average preference achieved: ${averagePreference.toFixed(2)}</strong>`;
+  ul.appendChild(averageLi);
   
   div.appendChild(ul);
   
@@ -730,6 +853,15 @@ function displayResults(results) {
   const assignHeader = document.createElement('h2');
   assignHeader.textContent = 'Assignments';
   div.appendChild(assignHeader);
+
+  // Add export to CSV button
+  const exportButton = document.createElement('button');
+  exportButton.textContent = 'Export to CSV';
+  exportButton.className = 'export-csv-btn';
+  exportButton.style.marginBottom = '15px';
+  exportButton.addEventListener('click', () => exportAssignmentsToCSV(assignments));
+  div.appendChild(exportButton);
+
   const assignTable = document.createElement('table');
   // enable sorting by clicking column headers
   const headers = ['Student','University','Preference'];
@@ -787,6 +919,77 @@ function displayResults(results) {
     assignTable.appendChild(row);
   });
   div.appendChild(assignTable);
+}
+
+function exportAssignmentsToCSV(assignments) {
+  const csvRows = [];
+  
+  csvRows.push([
+    'Student',
+    'University', 
+    'Agreement-ID',
+    'Semester',
+    'Preference',
+    'Programme',
+    'Study level',
+    'Faculty',
+    'Agreement-type'
+  ]);
+  
+  assignments.forEach(assignment => {
+    const student = assignment.student;
+    const uni = assignment.uni;
+    
+    if (!student || !uni) return;
+    
+    const semesterNum = (student.semester === '1st semester' || student.semester === 'Full academic year') ? 1 : 2;    
+    const faculty = getFacultyForStudyField(student.study_field) || '';
+    
+    let studentColumn = student.ID || assignment.stud;
+    if (student.fullName) {
+      studentColumn = `${studentColumn} (${student.fullName})`;
+    }
+    
+    csvRows.push([
+      studentColumn,
+      uni.partner_name || assignment.uniKey,
+      uni.agreement_ID || '',
+      semesterNum,
+      assignment.pref,
+      student.study_field || '',
+      student.study_level || '',
+      faculty,
+      uni.agreement_type || ''
+    ]);
+  });
+  
+  const csvContent = csvRows.map(row => 
+    row.map(field => {
+      const fieldStr = String(field || '');
+      if (fieldStr.includes(',') || fieldStr.includes('"') || fieldStr.includes('\n')) {
+        return '"' + fieldStr.replace(/"/g, '""') + '"';
+      }
+      return fieldStr;
+    }).join(',')
+  ).join('\n');
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  
+  if (navigator.msSaveBlob) {
+    // IE 10+
+    navigator.msSaveBlob(blob, 'assignment_results.csv');
+  } else {
+    // Other browsers
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'assignment_results.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
 }
 
 // Initialize the application when the DOM is fully loaded
