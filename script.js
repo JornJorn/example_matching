@@ -6,7 +6,7 @@ let selectedStudentForAssignment = null;
 
 const FACULTY_MAPPING = {
   'BMS': ['Psychology', 'Communication Science', 'Industrial Engineering and Management',
-          'International Business Administration', 'Management, Society & Technology'],
+          'International Business Administration', 'Management, Society & Technology', 'Educational Science and Technology'],
   'EEMCS': ['Applied Mathematics', 'Business & IT', 'Computer Science', 'Creative Technology',
             'Electrical Engineering', 'Business Information Technology', 'Embedded Systems',
             'Interaction Technology', 'Robotics', 'Systems and Control'],
@@ -428,12 +428,6 @@ function processUniversitiesData() {
       total2: 1000, 
       B2: 1000, 
       M2: 1000,
-      max_BMS: 1000,
-      max_EEMCS: 1000,
-      max_ET: 1000,
-      max_ITC: 1000,
-      max_ST: 1000,
-      max_UCT: 1000
     };
     idToUni[key] = uni;
 
