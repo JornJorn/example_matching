@@ -807,9 +807,20 @@ function displayResults(results) {
   totalStudentsLi.innerHTML = `<strong>Total students: ${totalStudents}</strong>`;
   ul.appendChild(totalStudentsLi);
 
-  const averagePreference = totalStudents > 0 ? (choiceCounts.reduce((sum, count) => sum + count * (choiceCounts.indexOf(count) + 1), 0) / totalStudents) : 0;
+  let totalPreferenceScore = 0;  
+  assignments.forEach(assignment => {
+    totalPreferenceScore += assignment.pref;
+  });  
+  const unmatchedStudents = Object.values(idToStud).filter(student => 
+    !matchedStudentIds.has(student.ID.toString())
+  );
+  unmatchedStudents.forEach(student => {
+    const validPrefs = (student.all_preferences || []).filter(pref => pref !== null).length;
+    totalPreferenceScore += validPrefs + 1;
+  });
+  const averagePreference = totalStudents > 0 ? (totalPreferenceScore / totalStudents) : 0;
   const averageLi = document.createElement('li');
-  averageLi.innerHTML = `<strong>Average preference achieved: ${averagePreference.toFixed(2)}</strong>`;
+  averageLi.innerHTML = `<strong>Average preference achieved: ${averagePreference.toFixed(3)}</strong>`;
   ul.appendChild(averageLi);
   
   div.appendChild(ul);
