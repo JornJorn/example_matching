@@ -19,6 +19,28 @@
     <label>Student applicants CSV: <input type="file" id="applicantsFile" accept=".csv,.xlsx,.xls"></label>
   </div>
   
+  <div id="prefWeightsContainer" style="display: none; margin-top: 15px;">
+    <h2>Preference Weights</h2>
+    <p class="info-text">Lower numbers are preferred. Set a custom weight per choice (1 to 6) to encourage or discourage certain choices.</p>
+    <div class="weights-grid">
+      <label>Choice 1: <input type="number" id="weight_1" min="0" step="1" value="1"></label>
+      <label>Choice 2: <input type="number" id="weight_2" min="0" step="1" value="2"></label>
+      <label>Choice 3: <input type="number" id="weight_3" min="0" step="1" value="3"></label>
+      <label>Choice 4: <input type="number" id="weight_4" min="0" step="1" value="4"></label>
+      <label>Choice 5: <input type="number" id="weight_5" min="0" step="1" value="5"></label>
+      <label>Choice 6: <input type="number" id="weight_6" min="0" step="1" value="6"></label>
+    </div>
+    <div style="margin-top: 8px;">
+      <button id="resetWeightsBtn" class="export-csv-btn" type="button">Reset weights</button>
+    </div>
+    <div class="info-text" style="margin-top:10px;">
+      <strong>How weights affect matching:</strong>
+      <ul style="margin:6px 0 0 18px;">
+        <li>Raising a specific choice’s weight discourages that choice; lowering it makes it more acceptable.</li>
+      </ul>
+    </div>
+  </div>
+  
   <div id="manualAssignment" style="display: none;">
     <h2>Manual Assignment</h2>
     <div class="manual-controls">

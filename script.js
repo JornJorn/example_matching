@@ -484,6 +484,7 @@ function processApplicantsData() {
 function processFiles() {
   const resultsDiv = document.getElementById('results');
   const manualAssignmentDiv = document.getElementById('manualAssignment');
+  const prefWeightsContainer = document.getElementById('prefWeightsContainer');
   
   // If both files aren't loaded yet, wait
   if (!universitiesLoaded || !applicantsLoaded) {
@@ -497,6 +498,7 @@ function processFiles() {
   
   // Show manual assignment section and exchange I factor after files are loaded
   manualAssignmentDiv.style.display = 'block';
+  if (prefWeightsContainer) prefWeightsContainer.style.display = 'block';
    
   updateManualAssignmentsList();
   
@@ -523,7 +525,8 @@ function processFiles() {
       // Use setTimeout to allow the spinner to render before computation starts
       setTimeout(() => {
         try {
-          const model = buildModel();
+          const weights = getPreferenceWeights();
+          const model = buildModel(weights);
           
           manualAssignments.forEach(assignment => {
             const student = idToStud[assignment.studentId];
@@ -589,6 +592,64 @@ function parseCsvFile(file) {
   });
 }
 
+// Build a set of all column names seen across rows
+function getHeaderSet(rows) {
+  const set = new Set();
+  (rows || []).forEach(r => Object.keys(r || {}).forEach(k => set.add(k)));
+  return set;
+}
+
+// Validate universities raw data for required headers and presence of data rows
+function validateUniversitiesRawData(rows) {
+  const errors = [];
+  if (!Array.isArray(rows) || rows.length === 0) {
+    errors.push('File appears empty or could not be parsed.');
+    return { ok: false, errors };
+  }
+  const headers = getHeaderSet(rows);
+  const required = ['ID', 'Abbr. of study field'];
+  const missing = required.filter(h => !headers.has(h));
+  const capacityAny = ['Total #', 'Nr of agreed spots in 1st sem.', 'Nr of agreed spots in 2nd sem.'];
+  const hasCapacityHeader = capacityAny.some(h => headers.has(h));
+  if (missing.length) {
+    errors.push('Missing required column(s): ' + missing.join(', '));
+  }
+  if (!hasCapacityHeader) {
+    errors.push('Need at least one capacity column: Total # or Nr of agreed spots in 1st/2nd sem.');
+  }
+  const validRows = rows.filter(r => typeof r['ID'] === 'number');
+  if (validRows.length === 0) {
+    errors.push("No data rows with a numeric 'ID' found.");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+// Validate applicants raw data for required headers and presence of data rows
+function validateApplicantsRawData(rows) {
+  const errors = [];
+  if (!Array.isArray(rows) || rows.length === 0) {
+    errors.push('File appears empty or could not be parsed.');
+    return { ok: false, errors };
+  }
+  const headers = getHeaderSet(rows);
+  const required = [
+    'ID of application',
+    'Abbreviation of study field',
+    'Study field',
+    'Study level',
+    'Semester'
+  ];
+  const missing = required.filter(h => !headers.has(h));
+  if (missing.length) {
+    errors.push('Missing required column(s): ' + missing.join(', '));
+  }
+  const validRows = rows.filter(r => typeof r['ID of application'] === 'number');
+  if (validRows.length === 0) {
+    errors.push("No data rows with a numeric 'ID of application' found.");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 // Calculate semester capacities from provided data
 function computeSemesters(spots1, spots2, total, maxB, maxM) {
   if (spots1 && !spots2) return { total1: spots1, B1: maxB, M1: maxM, total2: 0, B2: 0, M2: 0 };
@@ -597,8 +658,21 @@ function computeSemesters(spots1, spots2, total, maxB, maxM) {
   return { total1: spots1, B1: maxB, M1: maxM, total2: spots2, B2: maxB, M2: maxM };
 }
 
+// Read preference weights from inputs; fallback to defaults [1..6]
+function getPreferenceWeights() {
+  const defaults = [1,2,3,4,5,6];
+  const arr = [];
+  for (let i = 1; i <= 6; i++) {
+    const el = document.getElementById(`weight_${i}`);
+    let v = el ? parseInt(el.value, 10) : defaults[i-1];
+    if (isNaN(v) || v < 0) v = defaults[i-1];
+    arr.push(v);
+  }
+  return arr; // index 0 -> choice 1
+}
+
 // Build the linear programming model for student-university matching
-function buildModel() {
+function buildModel(prefWeights = [1,2,3,4,5,6]) {
   
   const agreementGroups = {};
   const studs1 = [];
@@ -657,14 +731,14 @@ function buildModel() {
       const pref = s.all_preferences[i-1];
       if (pref && idToUni[pref]){
         const u = idToUni[pref];
-    const wt = i;
+    const wt = prefWeights[i-1] ?? i;
         const name = 'x_' + s.ID + '_' + u.key;
         model.variables[name] = buildVar(wt, s.ID, u, 'f', s);
       } else if (pref==null) {
         const keyF = i + '-fictional';
         const u = idToUni[keyF];
         const name = 'x_' + s.ID + '_' + u.key;
-    model.variables[name] = buildVar(i, s.ID, u, 'f', s);
+    model.variables[name] = buildVar(prefWeights[i-1] ?? i, s.ID, u, 'f', s);
       }
     }
     // dummy, if no option can be assigned
@@ -677,14 +751,14 @@ function buildModel() {
       const pref = s.all_preferences[i-1];
       if (pref && idToUni[pref]){
         const u = idToUni[pref];
-    const wt = i;
+    const wt = prefWeights[i-1] ?? i;
         const name = 'y_' + s.ID + '_' + u.key;
         model.variables[name] = buildVar(wt, s.ID, u, 's', s);
       } else if (pref==null) {
         const keyF = i + '-fictional';
         const u = idToUni[keyF];
         const name = 'y_' + s.ID + '_' + u.key;
-    model.variables[name] = buildVar(i, s.ID, u, 's', s);
+    model.variables[name] = buildVar(prefWeights[i-1] ?? i, s.ID, u, 's', s);
       }
     }
     // dummy, if no option can be assigned
@@ -977,14 +1051,30 @@ function exportAssignmentsToCSV(assignments) {
 document.addEventListener('DOMContentLoaded', function() {
   const universitiesFileInput = document.getElementById('universitiesFile');
   const applicantsFileInput = document.getElementById('applicantsFile');
+  const resetWeightsBtn = document.getElementById('resetWeightsBtn');
 
   
   setupStudentSearch();
+  if (resetWeightsBtn) {
+    resetWeightsBtn.addEventListener('click', () => {
+      for (let i=1;i<=6;i++) {
+        const el = document.getElementById(`weight_${i}`);
+        if (el) el.value = String(i);
+      }
+    });
+  }
   
   universitiesFileInput.addEventListener('change', function() {
     const file = this.files[0];
     if (file) {
       parseFile(file).then(data => {
+        const v = validateUniversitiesRawData(data);
+        if (!v.ok) {
+          alert('Universities file issues:\n\n' + v.errors.map(e => '- ' + e).join('\n'));
+          universitiesData = null;
+          universitiesLoaded = false;
+          return;
+        }
         universitiesData = data;
         universitiesLoaded = true;
         processUniversitiesData();
@@ -1000,6 +1090,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const file = this.files[0];
     if (file) {
       parseFile(file).then(data => {
+        const v = validateApplicantsRawData(data);
+        if (!v.ok) {
+          alert('Applicants file issues:\n\n' + v.errors.map(e => '- ' + e).join('\n'));
+          applicantsData = null;
+          applicantsLoaded = false;
+          return;
+        }
         applicantsData = data;
         applicantsLoaded = true;
         processApplicantsData();
