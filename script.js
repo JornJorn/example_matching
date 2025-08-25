@@ -412,12 +412,12 @@ function processUniversitiesData() {
       agreement_ID: id, 
       study_abbr: id, 
       key, 
-      total1: 1000, 
-      B1: 1000, 
-      M1: 1000, 
-      total2: 1000, 
-      B2: 1000, 
-      M2: 1000,
+      total1: 10000, 
+      B1: 10000, 
+      M1: 10000, 
+      total2: 10000, 
+      B2: 10000, 
+      M2: 10000,
     };
     idToUni[key] = uni;
 
@@ -694,6 +694,9 @@ function buildModel(prefWeights = [1,2,3,4,5,6]) {
   });
   
   const model = { optimize: 'obj', opType: 'min', constraints: {}, variables: {} };
+  const totalStudents = studs1.length + studs2.length;
+  const maxWeight = Math.max.apply(null, prefWeights);
+  const dummyPenalty = totalStudents * maxWeight + 1;
   // Every student must be assigned to exactly one university
   studs1.forEach(s => { model.constraints['student_f_' + s.ID] = { equal: 1 }; });
   studs2.forEach(s => { model.constraints['student_s_' + s.ID] = { equal: 1 }; });
@@ -744,7 +747,7 @@ function buildModel(prefWeights = [1,2,3,4,5,6]) {
     // dummy, if no option can be assigned
     const u = idToUni['dummy-dummy'];
     const name = 'x_' + s.ID + '_' + u.key;
-  model.variables[name] = buildVar(1000, s.ID, u, 'f', s);
+  model.variables[name] = buildVar(dummyPenalty, s.ID, u, 'f', s);
   });
   studs2.forEach(s => {
     for (let i=6;i>=1;i--){
@@ -764,7 +767,7 @@ function buildModel(prefWeights = [1,2,3,4,5,6]) {
     // dummy, if no option can be assigned
     const u = idToUni['dummy-dummy'];
     const name = 'y_' + s.ID + '_' + u.key;
-  model.variables[name] = buildVar(1000, s.ID, u, 's', s);
+  model.variables[name] = buildVar(dummyPenalty, s.ID, u, 's', s);
   });
   
   return model;
