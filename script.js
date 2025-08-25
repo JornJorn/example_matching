@@ -40,16 +40,6 @@ function hasFacultyConstraints() {
   return Object.values(idToUni).some(uni => hasUniFacultyConstraints(uni));
 }
 
-// Validate Exchange I Factor input
-function validateInput(input) {
-  let value = parseInt(input.value);
-  
-  if (isNaN(value) || value < 1) {
-    input.value = 1;
-  } else {
-    input.value = Math.floor(value);
-  }
-}
 
 // Check if manual assignments are feasible
 function checkManualAssignmentsFeasibility() {
@@ -494,7 +484,6 @@ function processApplicantsData() {
 function processFiles() {
   const resultsDiv = document.getElementById('results');
   const manualAssignmentDiv = document.getElementById('manualAssignment');
-  const exchangeIFactorContainer = document.getElementById('exchangeIFactorContainer');
   
   // If both files aren't loaded yet, wait
   if (!universitiesLoaded || !applicantsLoaded) {
@@ -508,8 +497,7 @@ function processFiles() {
   
   // Show manual assignment section and exchange I factor after files are loaded
   manualAssignmentDiv.style.display = 'block';
-  exchangeIFactorContainer.style.display = 'block';
-  
+   
   updateManualAssignmentsList();
   
   if (!document.querySelector('.actual-solve-btn')) {
@@ -535,9 +523,7 @@ function processFiles() {
       // Use setTimeout to allow the spinner to render before computation starts
       setTimeout(() => {
         try {
-          const exchangeI_factor = parseInt(document.getElementById('exchangeIFactor').value) || 1;
-          
-          const model = buildModel(exchangeI_factor);
+          const model = buildModel();
           
           manualAssignments.forEach(assignment => {
             const student = idToStud[assignment.studentId];
@@ -612,8 +598,7 @@ function computeSemesters(spots1, spots2, total, maxB, maxM) {
 }
 
 // Build the linear programming model for student-university matching
-function buildModel(exchangeI_factor = 1) {
-  exchangeI_factor = (!isNaN(exchangeI_factor) && exchangeI_factor >= 1) ? Math.floor(exchangeI_factor) : 1;
+function buildModel() {
   
   const agreementGroups = {};
   const studs1 = [];
@@ -668,44 +653,44 @@ function buildModel(exchangeI_factor = 1) {
   
   // variables for each arc
   studs1.forEach(s => {
-    for (let i=6;i>=1;i--){ 
+  for (let i=6;i>=1;i--){ 
       const pref = s.all_preferences[i-1];
       if (pref && idToUni[pref]){
         const u = idToUni[pref];
-        const wt = (u.agreement_type==='Exchange-I'?i:exchangeI_factor*i);
+    const wt = i;
         const name = 'x_' + s.ID + '_' + u.key;
         model.variables[name] = buildVar(wt, s.ID, u, 'f', s);
       } else if (pref==null) {
         const keyF = i + '-fictional';
         const u = idToUni[keyF];
         const name = 'x_' + s.ID + '_' + u.key;
-        model.variables[name] = buildVar(exchangeI_factor*i, s.ID, u, 'f', s);
+    model.variables[name] = buildVar(i, s.ID, u, 'f', s);
       }
     }
     // dummy, if no option can be assigned
     const u = idToUni['dummy-dummy'];
     const name = 'x_' + s.ID + '_' + u.key;
-    model.variables[name] = buildVar(1000*exchangeI_factor, s.ID, u, 'f', s);
+  model.variables[name] = buildVar(1000, s.ID, u, 'f', s);
   });
-    studs2.forEach(s => {
+  studs2.forEach(s => {
     for (let i=6;i>=1;i--){
       const pref = s.all_preferences[i-1];
       if (pref && idToUni[pref]){
         const u = idToUni[pref];
-        const wt = (u.agreement_type==='Exchange-I'?i:exchangeI_factor*i);
+    const wt = i;
         const name = 'y_' + s.ID + '_' + u.key;
         model.variables[name] = buildVar(wt, s.ID, u, 's', s);
       } else if (pref==null) {
         const keyF = i + '-fictional';
         const u = idToUni[keyF];
         const name = 'y_' + s.ID + '_' + u.key;
-        model.variables[name] = buildVar(exchangeI_factor*i, s.ID, u, 's', s);
+    model.variables[name] = buildVar(i, s.ID, u, 's', s);
       }
     }
     // dummy, if no option can be assigned
     const u = idToUni['dummy-dummy'];
     const name = 'y_' + s.ID + '_' + u.key;
-    model.variables[name] = buildVar(1000*exchangeI_factor, s.ID, u, 's', s);
+  model.variables[name] = buildVar(1000, s.ID, u, 's', s);
   });
   
   return model;
@@ -735,7 +720,6 @@ function displayResults(results) {
   
   const choiceCounts = Array(6).fill(0);
   const assignments = [];
-  let exchangeICount = 0;
   
   const matchedStudentIds = new Set();
   
@@ -755,11 +739,6 @@ function displayResults(results) {
       if (idx >= 0 && idx < 6) {
         choiceCounts[idx]++;
         
-        const isExchangeI = !uniKey.includes('-dummy') && !uniKey.includes('-fictional') && 
-                            idToUni[uniKey] && idToUni[uniKey].agreement_type === 'Exchange-I';
-        if (isExchangeI) {
-          exchangeICount++;
-        }
         
         const student = idToStud[stud];
         const fullName = student && student.fullName ? student.fullName : '';
@@ -792,9 +771,6 @@ function displayResults(results) {
     ul.appendChild(li);
   });
   
-  const exchangeILi = document.createElement('li');
-  exchangeILi.innerHTML = `<strong>Exchange I slots filled: ${exchangeICount}</strong>`;
-  ul.appendChild(exchangeILi);
   
   const totalStudents = Object.keys(idToStud).length;
   const notMatchedStudents = totalStudents - matchedStudentIds.size;
@@ -999,15 +975,9 @@ function exportAssignmentsToCSV(assignments) {
 
 // Initialize the application when the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', function() {
-  const exchangeIFactorInput = document.getElementById('exchangeIFactor');
   const universitiesFileInput = document.getElementById('universitiesFile');
   const applicantsFileInput = document.getElementById('applicantsFile');
-  
-  validateInput(exchangeIFactorInput);
-  
-  exchangeIFactorInput.addEventListener('blur', function() {
-    validateInput(this);
-  });
+
   
   setupStudentSearch();
   
