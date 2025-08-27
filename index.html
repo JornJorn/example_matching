@@ -51,9 +51,23 @@
       <div class="assignment-container" style="display: none;">
         <h3>Assign <span id="selectedStudentName"></span></h3>
         <div id="preferenceOptions"></div>
-        <button id="addAssignmentBtn">Add Assignment</button>
+  <button id="addAssignmentBtn">Add Assignment</button>
+  <button id="forbidAssignmentBtn" title="Disallow this student-university pair">Forbid</button>
         <button id="cancelAssignmentBtn">Cancel</button>
       </div>
+    </div>
+    <div id="forbiddenAssignmentsList" style="margin-top:16px;">
+      <h3>Forbidden Assignments</h3>
+      <table id="forbiddenAssignmentsTable">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Forbidden University</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
     <div id="manualAssignmentsList">
       <h3>Manual Assignments</h3>

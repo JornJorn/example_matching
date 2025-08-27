@@ -2,6 +2,7 @@
 let idToUni = {};
 let idToStud = {};
 let manualAssignments = [];
+let forbiddenAssignments = [];
 let selectedStudentForAssignment = null;
 
 const FACULTY_MAPPING = {
@@ -202,6 +203,59 @@ function updateManualAssignmentsList() {
   });
 }
 
+  // Update the forbidden assignments list display
+  function updateForbiddenAssignmentsList() {
+    const tbody = document.querySelector('#forbiddenAssignmentsTable tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (forbiddenAssignments.length === 0) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 3;
+      cell.textContent = 'No forbidden assignments yet';
+      cell.style.textAlign = 'center';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
+
+    forbiddenAssignments.forEach((item, index) => {
+      const row = document.createElement('tr');
+
+      const studentCell = document.createElement('td');
+      const student = idToStud[item.studentId];
+      if (student && student.fullName) {
+        studentCell.textContent = `${item.studentId} (${student.fullName})`;
+      } else {
+        studentCell.textContent = String(item.studentId);
+      }
+      row.appendChild(studentCell);
+
+      const uniCell = document.createElement('td');
+      const uni = idToUni[item.uniKey];
+      if (uni && uni.partner_name) {
+        uniCell.textContent = `${item.uniKey} (${uni.partner_name})`;
+      } else {
+        uniCell.textContent = item.uniKey;
+      }
+      row.appendChild(uniCell);
+
+      const actionCell = document.createElement('td');
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '✖';
+      removeBtn.className = 'remove-assignment';
+      removeBtn.addEventListener('click', () => {
+        forbiddenAssignments.splice(index, 1);
+        updateForbiddenAssignmentsList();
+      });
+      actionCell.appendChild(removeBtn);
+      row.appendChild(actionCell);
+
+      tbody.appendChild(row);
+    });
+  }
+
 // Setup student search functionality
 function setupStudentSearch() {
   const searchInput = document.getElementById('studentSearch');
@@ -211,6 +265,7 @@ function setupStudentSearch() {
   const preferenceOptionsDiv = document.getElementById('preferenceOptions');
   const addBtn = document.getElementById('addAssignmentBtn');
   const cancelBtn = document.getElementById('cancelAssignmentBtn');
+  const forbidBtn = document.getElementById('forbidAssignmentBtn');
   
   // Hide results when clicking outside
   document.addEventListener('click', (e) => {
@@ -312,6 +367,26 @@ function setupStudentSearch() {
     selectedStudentForAssignment = null;
     preferenceOptionsDiv.innerHTML = '';
   });
+
+  // Handle forbid button
+  if (forbidBtn) {
+    forbidBtn.addEventListener('click', () => {
+      const selectedPref = preferenceOptionsDiv.querySelector('.preference-option.selected');
+      if (!selectedPref || !selectedStudentForAssignment) {
+        alert('Please select a preference first');
+        return;
+      }
+      const uniKey = selectedPref.dataset.unikey;
+      // Avoid duplicates
+      const exists = forbiddenAssignments.some(a => a.studentId === selectedStudentForAssignment.ID && a.uniKey === uniKey);
+      if (!exists) {
+        forbiddenAssignments.push({ studentId: selectedStudentForAssignment.ID, uniKey });
+        updateForbiddenAssignmentsList();
+      } else {
+        alert('This forbid rule already exists');
+      }
+    });
+  }
 }
 
 // Display a student's university preferences for assignment
@@ -436,6 +511,7 @@ function processApplicantsData() {
   const appData = applicantsData.filter(r => typeof r['ID of application'] === 'number');
   
   const students = appData.map(r => {
+  const studentNumber = r['Student number'] == null ? '' : String(r['Student number']);
     const hasFirstName = Object.keys(r).some(key => key === 'First name');
     const hasLastName = Object.keys(r).some(key => key.startsWith('Last name'));
     const firstName = hasFirstName ? (r['First name'] || '') : '';
@@ -444,6 +520,7 @@ function processApplicantsData() {
     const fullName = [firstName, lastName].filter(Boolean).join(' ');
     return {
       ID: r['ID of application'],
+      student_number: studentNumber,
       firstName: firstName,
       lastName: lastName,
       fullName: fullName,
@@ -501,6 +578,7 @@ function processFiles() {
   if (prefWeightsContainer) prefWeightsContainer.style.display = 'block';
    
   updateManualAssignmentsList();
+  updateForbiddenAssignmentsList();
   
   if (!document.querySelector('.actual-solve-btn')) {
     const actualSolveBtn = document.createElement('button');
@@ -542,6 +620,19 @@ function processFiles() {
               model.variables[varName]['manual_' + assignment.studentId] = 1;
             } else {
               console.error(`Variable ${varName} not found in the model`);
+            }
+          });
+
+          // Apply forbidden assignment constraints: ensure variable = 0
+          forbiddenAssignments.forEach(rule => {
+            const student = idToStud[rule.studentId];
+            if (!student) return;
+            const prefix = (student.semester === '1st semester' || student.semester === 'Full academic year') ? 'x_' : 'y_';
+            const varName = prefix + rule.studentId + '_' + rule.uniKey;
+            const cName = 'forbid_' + rule.studentId + '_' + rule.uniKey;
+            model.constraints[cName] = { equal: 0 };
+            if (model.variables[varName]) {
+              model.variables[varName][cName] = 1;
             }
           });
           
@@ -983,7 +1074,9 @@ function exportAssignmentsToCSV(assignments) {
   const csvRows = [];
   
   csvRows.push([
-    'Student',
+    'Application ID',
+    'Student number',
+    'Student name',
     'University', 
     'Agreement-ID',
     'Semester',
@@ -1002,14 +1095,15 @@ function exportAssignmentsToCSV(assignments) {
     
     const semesterNum = (student.semester === '1st semester' || student.semester === 'Full academic year') ? 1 : 2;    
     const faculty = getFacultyForStudyField(student.study_field) || '';
-    
-    let studentColumn = student.ID || assignment.stud;
-    if (student.fullName) {
-      studentColumn = `${studentColumn} (${student.fullName})`;
-    }
-    
+
+    const applicationId = student.ID || assignment.stud;
+    const studentNumber = student.student_number || '';
+    const studentName = student.fullName || '';
+
     csvRows.push([
-      studentColumn,
+      applicationId,
+      studentNumber,
+      studentName,
       uni.partner_name || assignment.uniKey,
       uni.agreement_ID || '',
       semesterNum,
